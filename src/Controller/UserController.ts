@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import User, { IUser } from '../models/User'
+import jwt from 'jsonwebtoken'
 
 class UserController {
   async register(req: Request, res: Response): Promise<void> {
@@ -22,12 +23,16 @@ class UserController {
   async login(req: Request, res: Response): Promise<void> {
     try {
       const { email, password } = req.body
+      const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret'
       const user = await User.findOne({ email, password })
       if (!user) {
         res.status(401).json({ error: 'Credenciais inválidas' })
         return
       }
-      res.status(200).json(user)
+      const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
+        expiresIn: '1h'
+      })
+      res.status(200).json({ user, token })
     } catch (error) {
       res.status(500).json({ error: 'Erro ao fazer login' })
     }
