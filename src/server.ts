@@ -11,7 +11,7 @@ const app: Application = express()
 // Middleware
 app.use(
   cors({
-    origin: ['https://tranfermeweb.vercel.app'],
+    origin: ['https://transfermeweb.vercel.app/'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
   })
