@@ -1,27 +1,25 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret'
-
-export interface AuthRequest extends Request {
-  user?: any
-}
+import { AuthRequest, AuthPayload } from '../types/express'
 
 export function authMiddleware(
   req: AuthRequest,
   res: Response,
-  next: Function
+  next: NextFunction
 ) {
   const authHeader = req.headers.authorization
   if (!authHeader) {
     return res.status(401).json({ error: 'Token não fornecido' })
   }
-  const [, token] = authHeader.split(' ')
+
+  const token = authHeader.split(' ')[1]
+  const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret'
+
   try {
-    const decoded = jwt.verify(token, JWT_SECRET)
-    req.user = decoded
+    const payload = jwt.verify(token, JWT_SECRET) as AuthPayload
+    req.user = payload
     next()
   } catch (err) {
-    res.status(401).json({ error: 'Token inválido' })
+    return res.status(401).json({ error: 'Token inválido' })
   }
 }

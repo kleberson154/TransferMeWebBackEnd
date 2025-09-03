@@ -9,12 +9,17 @@ router.post('/register', async (req, res) => {
   await UserController.register(req, res)
 })
 
-router.get('/login', async (req, res) => {
+router.post('/', async (req, res) => {
   await UserController.login(req, res)
 })
 
 router.get('/home', authMiddleware, async (req, res) => {
-  res.json({ message: 'Bem-vindo à sua conta!' })
+  try {
+    const user = await UserController.getUserData(req, res)
+    res.json(user)
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 router.post('/deposit', authMiddleware, async (req, res) => {

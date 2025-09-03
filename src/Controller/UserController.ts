@@ -1,95 +1,132 @@
-import { Request, Response } from 'express'
+import { Response } from 'express'
+import { AuthRequest } from '../types/express'
 import User, { IUser } from '../models/User'
 import jwt from 'jsonwebtoken'
 
 class UserController {
-  async register(req: Request, res: Response): Promise<void> {
+  async register(req: AuthRequest, res: Response): Promise<Response | void> {
     try {
-      const { email, password, firstName, lastName, phone } = req.body
+      const { email, senha, nome, sobrenome, telefone } = req.body
+
+      const existingUser = await User.findOne({ email })
+      if (existingUser) {
+        res.status(409).json({ error: 'Usuário já existe' })
+        return
+      }
+
       const newUser: IUser = new User({
         email,
-        password,
-        firstName,
-        lastName,
-        phone
+        password: senha,
+        firstName: nome,
+        lastName: sobrenome,
+        phone: telefone
       })
+
       await newUser.save()
-      res.status(201).json(newUser)
+
+      const { password, ...userData } = newUser.toObject()
+      res.status(201).json(userData)
     } catch (error) {
       res.status(500).json({ error: 'Erro ao registrar usuário' })
     }
   }
 
-  async login(req: Request, res: Response): Promise<void> {
+  async login(req: AuthRequest, res: Response): Promise<Response | void> {
     try {
       const { email, password } = req.body
       const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret'
-      const user = await User.findOne({ email, password })
+
+      const user = await User.findOne({ email })
       if (!user) {
         res.status(401).json({ error: 'Credenciais inválidas' })
         return
       }
+
+      const isMatch = await (user as any).comparePassword(password)
+      if (!isMatch) {
+        res.status(401).json({ error: 'Credenciais inválidas' })
+        return
+      }
+
       const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
         expiresIn: '1h'
       })
-      res.status(200).json({ user, token })
+
+      const { password: _, ...safeUser } = user.toObject()
+      res.status(200).json({ user: safeUser, token })
     } catch (error) {
       res.status(500).json({ error: 'Erro ao fazer login' })
     }
   }
 
-  async deposit(req: Request, res: Response): Promise<void> {
+  async getUserData(req: AuthRequest, res: Response): Promise<Response | void> {
     try {
-      const { idUser, value } = req.body
-      const user = await User.findOneAndUpdate(
-        { _id: idUser },
+      const user = await User.findById(req.user!.id).select('-password')
+      if (!user) {
+        res.status(404).json({ error: 'Usuário não encontrado' })
+        return
+      }
+      res.status(200).json({ user })
+    } catch (error) {
+      res.status(500).json({ error: 'Erro ao buscar dados do usuário' })
+    }
+  }
+
+  async deposit(req: AuthRequest, res: Response): Promise<Response | void> {
+    try {
+      const { value } = req.body
+      const user = await User.findByIdAndUpdate(
+        req.user!.id,
         { $inc: { balance: value } },
         { new: true }
-      )
-      res.json(user)
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+      ).select('-password')
+
+      if (!user) {
+        res.status(404).json({ error: 'Usuário não encontrado' })
+        return
+      }
+
+      res.json({ user })
+    } catch (err) {
+      res.status(500).json({ error: 'Erro ao depositar' })
     }
   }
 
-  // Saque
-  async withdraw(req: Request, res: Response): Promise<void> {
+  async withdraw(req: AuthRequest, res: Response): Promise<Response | void> {
     try {
-      const { idUser, value } = req.body
-      const user = await User.findOne({ _id: idUser })
-      if (!user) {
-        res.status(404).json({ error: 'Conta não encontrada' })
-        return
-      }
+      const { value } = req.body
+      const user = await User.findById(req.user!.id)
+      if (!user)
+        return res.status(404).json({ error: 'Usuário não encontrado' })
+
       if (user.balance < value) {
-        res.status(400).json({ error: 'Saldo insuficiente' })
-        return
+        return res.status(400).json({ error: 'Saldo insuficiente' })
       }
+
       user.balance -= value
       await user.save()
-      res.json(user)
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+
+      const { password, ...safeUser } = user.toObject()
+      res.json({ user: safeUser })
+    } catch (err) {
+      res.status(500).json({ error: 'Erro no saque' })
     }
   }
 
-  // Transferência
-  async transfer(req: Request, res: Response): Promise<void> {
+  async transfer(req: AuthRequest, res: Response): Promise<Response | void> {
     try {
-      const { idUser, inputEmail, value } = req.body
-
-      const from = await User.findOne({ _id: idUser })
-      const to = await User.findOne({ email: inputEmail })
+      const { email, value } = req.body
+      const from = await User.findById(req.user!.id)
+      const to = await User.findOne({ email })
 
       if (!from || !to) {
-        res
+        return res
           .status(404)
           .json({ error: 'Conta remetente ou destinatária não encontrada' })
-        return
       }
+
       if (from.balance < value) {
-        res.status(400).json({ error: 'Saldo insuficiente' })
-        return
+        return res.status(400).json({ error: 'Saldo insuficiente' })
       }
 
       from.balance -= value
@@ -98,9 +135,12 @@ class UserController {
       await from.save()
       await to.save()
 
-      res.json({ from, to })
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
+      res.json({
+        from: { ...from.toObject(), password: undefined },
+        to: { ...to.toObject(), password: undefined }
+      })
+    } catch (err) {
+      res.status(500).json({ error: 'Erro na transferência' })
     }
   }
 }

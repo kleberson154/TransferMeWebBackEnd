@@ -21,7 +21,7 @@ const userSchema: Schema = new Schema(
     lastName: { type: String, required: true },
     phone: { type: String, required: true },
     balance: { type: Number, required: true, default: 0 },
-    limitCredit: { type: Number, required: true, default: 0 }
+    limitCredit: { type: Number, required: true, default: 1000 }
   },
   { timestamps: true }
 )
