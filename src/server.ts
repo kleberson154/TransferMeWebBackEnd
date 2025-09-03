@@ -9,7 +9,13 @@ dotenv.config()
 const app: Application = express()
 
 // Middleware
-app.use(cors())
+app.use(
+  cors({
+    origin: ['https://tranferme.vercel.app'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+)
 app.use(express.json())
 
 // Conexão com o MongoDB
